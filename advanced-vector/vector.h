@@ -34,9 +34,8 @@ public:
 
     }
 
-    Vector(Vector&& other) noexcept
-        :data_(std::move(other.data_))
-        , size_(std::exchange(other.size_, 0)) {
+    Vector(Vector&& other) noexcept {
+        Swap(other);
     }
 
     Vector& operator=(const Vector& rhs) {
@@ -44,8 +43,7 @@ public:
             if (rhs.size_ > data_.Capacity()) {
                 Vector tmp(rhs);
                 Swap(tmp);
-            }
-            else {
+            } else {
                 const size_t copy_count = std::min(size_, rhs.size_);
                 std::copy_n(rhs.data_.GetAddress(), copy_count, data_.GetAddress());
                 if (rhs.Size() < size_) {
@@ -134,8 +132,7 @@ public:
     void Resize(size_t new_size) {
         if (size_ > new_size) {
             std::destroy_n(begin() + new_size, size_ - new_size);
-        }
-        else {
+        } else {
             Reserve(new_size);
             std::uninitialized_value_construct_n(end(), new_size - size_);
         }
@@ -158,20 +155,7 @@ public:
 
     template <typename... Args>
     T& EmplaceBack(Args&&... args) {
-        T* ptr = nullptr;
-        if (size_ == Capacity()) {
-            size_t new_size = (size_ != 0) ? size_ * 2 : 1;
-            RawMemory<T> new_data(new_size);
-            ptr = new (new_data + size_) T(std::forward<Args>(args)...);
-            RealocateData(begin(), size_, new_data.GetAddress());
-            std::destroy_n(begin(), size_);
-            data_.Swap(new_data);
-        }
-        else {
-            ptr = new (data_ + size_) T(std::forward<Args>(args)...);
-        }
-        ++size_;
-        return *ptr;
+        return *Emplace(end(), std::forward<Args>(args)...);
     }
 
     template <typename... Args>
@@ -179,24 +163,32 @@ public:
         assert(pos >= begin() && pos <= end());
         size_t idx = pos - begin();
         if (size_ < Capacity()) {
-            void* buf = operator new (sizeof(T));
-            T* tmp = new (buf) T(std::forward<Args>(args)...);
-            new (end()) T(std::forward<T>(*(end() - 1)));
-            std::move_backward(begin() + idx, end() - 1, end());
-            data_[idx] = std::forward<T>(*tmp);
-            tmp->~T();
-            operator delete (buf);
-        }
-        else if (size_ == Capacity()) {
-            size_t new_size = (size_ != 0) ? size_ * 2 : 1;
+            if (pos != end()) {
+                void* buf = operator new (sizeof(T));
+                T* tmp = new (buf) T(std::forward<Args>(args)...);
+                new (end()) T(std::forward<T>(*(end() - 1)));
+                std::move_backward(begin() + idx, end() - 1, end());
+                data_[idx] = std::forward<T>(*tmp);
+                tmp->~T();
+                operator delete (buf);
+            } else {
+                new (data_ + idx) T(std::forward<Args>(args)...);
+            }            
+        } else if (size_ == Capacity()) {
+            size_t new_size = (size_ != 0) ? Capacity() * 2 : 1;
             RawMemory<T> new_data(new_size);
             new(new_data + idx) T(std::forward<Args>(args)...);
             try {
                 RealocateData(begin(), idx, new_data.GetAddress());
-                RealocateData(begin() + idx, size_ - idx, new_data.GetAddress() + idx + 1);
-            }
-            catch (...) {
+            } catch (...) {
                 std::destroy_n(new_data.GetAddress() + idx, 1);
+                throw;
+            }                
+            
+            try {
+                RealocateData(begin() + idx, size_ - idx, new_data.GetAddress() + idx + 1);
+            } catch (...) {
+                std::destroy_n(new_data.GetAddress(), idx);
                 throw;
             }
             std::destroy_n(begin(), size_);
@@ -229,8 +221,7 @@ private:
     void RealocateData(iterator begin, size_t idx, T* new_data) {
         if constexpr (std::is_nothrow_move_constructible_v<T> || !std::is_copy_constructible_v<T>) {
             std::uninitialized_move_n(begin, idx, new_data);
-        }
-        else {
+        } else {
             std::uninitialized_copy_n(begin, idx, new_data);
         }
     }
