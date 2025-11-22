@@ -139,13 +139,9 @@ public:
         size_ = new_size;
     }
 
-
-    void PushBack(const T& value) {
-        EmplaceBack(value);
-    }
-
-    void PushBack(T&& value) {
-        EmplaceBack(std::move(value));
+    template<typename S>
+    void PushBack(S&& value) {
+        EmplaceBack(std::forward<S>(value));
     }
 
     void PopBack() noexcept {
@@ -173,7 +169,7 @@ public:
                 operator delete (buf);
             } else {
                 new (data_ + idx) T(std::forward<Args>(args)...);
-            }            
+            }
         } else if (size_ == Capacity()) {
             size_t new_size = (size_ != 0) ? Capacity() * 2 : 1;
             RawMemory<T> new_data(new_size);
@@ -183,8 +179,8 @@ public:
             } catch (...) {
                 std::destroy_n(new_data.GetAddress() + idx, 1);
                 throw;
-            }                
-            
+            }
+
             try {
                 RealocateData(begin() + idx, size_ - idx, new_data.GetAddress() + idx + 1);
             } catch (...) {
@@ -206,12 +202,21 @@ public:
         return begin() + idx;
     }
 
-    iterator Insert(const_iterator pos, const T& value) {
-        return Emplace(pos, value);
+    template<typename S>
+    iterator Insert(const_iterator pos, S&& value) {
+        return Emplace(pos, std::forward<S>(value));
     }
 
-    iterator Insert(const_iterator pos, T&& value) {
-        return Emplace(pos, std::move(value));
+    T& Front () {
+        if(size_ != 0) {
+            return *begin();
+        }
+    }
+
+    T& Back () {
+        if(size_ != 0) {
+            return *(end() - 1);
+        }
     }
 
 private:
