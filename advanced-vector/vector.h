@@ -16,6 +16,8 @@ public:
 
     using iterator = T*;
     using const_iterator = const T*;
+    using reverse_iterator = std::reverse_iterator<iterator>;
+
 
     Vector() = default;
 
@@ -217,6 +219,14 @@ public:
         if(size_ != 0) {
             return *(end() - 1);
         }
+    }
+
+    reverse_iterator rbegin() {
+        return reverse_iterator(end());
+    }
+
+    reverse_iterator rend() {
+        return reverse_iterator(begin());
     }
 
 private:
