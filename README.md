@@ -1,2 +1,3 @@
-# cpp-advanced-vector
-Финальный проект: улучшенный контейнер вектор
+# Vector
+Prototype of container.
+Supports the same basic functions as STL vector.
